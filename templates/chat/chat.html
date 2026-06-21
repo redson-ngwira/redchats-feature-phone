@@ -29,10 +29,10 @@
 <p><a href="?page={{ msg_page|add:-1 }}">[Newer]</a></p>
 {% endif %}
 
-{% if total_chunks > 1 %}
+{% if last_response_chunked %}
 <hr/>
-<div class="chunk">
-<span class="hint">({{ chunk_page|add:1 }}/{{ total_chunks }}):</span><br/>
+<div class="msg msg-ai">
+<span class="role">AI ({{ chunk_page|add:1 }}/{{ total_chunks }}):</span><br/>
 {{ current_chunk }}
 </div>
 <p>

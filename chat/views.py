@@ -366,15 +366,24 @@ def chat_view(request):
     all_msgs = conversation.messages.filter(role__in=['user', 'assistant'])
     total = all_msgs.count()
     per_page = settings.MESSAGES_PER_PAGE
-    start = max(0, total - (msg_page + 1) * per_page)
-    end = total - msg_page * per_page
+
+    chunks = request.session.get('last_chunks', [])
+    chunk_idx = request.session.get('last_chunk_page', 0)
+    last_response_chunked = len(chunks) > 1
+
+    effective_total = total
+    if last_response_chunked and total > 0:
+        last_msg = all_msgs.last()
+        if last_msg and last_msg.role == 'assistant':
+            effective_total = total - 1
+
+    start = max(0, effective_total - (msg_page + 1) * per_page)
+    end = effective_total - msg_page * per_page
     chat_messages = list(all_msgs[start:end])
 
     usage = get_usage(request.user)
     limit_info = check_limit(request.user)
 
-    chunks = request.session.get('last_chunks', [])
-    chunk_idx = request.session.get('last_chunk_page', 0)
     current_chunk = chunks[chunk_idx] if chunks and chunk_idx < len(chunks) else ''
 
     return render(request, 'chat/chat.html', {
@@ -390,6 +399,7 @@ def chat_view(request):
         'total_chunks': len(chunks),
         'has_next_chunk': chunk_idx < len(chunks) - 1,
         'has_prev_chunk': chunk_idx > 0,
+        'last_response_chunked': last_response_chunked,
         'usage': usage,
         'limit_warning': limit_info.get('warning', False),
         'usage_percent': limit_info.get('percent', 0),
