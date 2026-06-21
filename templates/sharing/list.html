@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Sharing</h2>
-<p class="hint">Type "n" to share, "i" to import a code:</p>
+<p class="hint">"n" to share, "i" to import a code:</p>
 <form method="post">
 {% csrf_token %}
 <input type="text" name="choice" autofocus="autofocus" style="width:50px"/>

@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Memory</h2>
-<p class="hint">Facts the AI remembers about you across chats.</p>
-<p class="hint">Type number to edit, "n" for new, "e" to extract from chat:</p>
+<p class="hint">AI remembers facts about you. Number=edit, n=new, e=extract:</p>
 <form method="post">
 {% csrf_token %}
 <input type="text" name="choice" autofocus="autofocus" style="width:50px"/>

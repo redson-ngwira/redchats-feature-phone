@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Quick Actions</h2>
-<p class="hint">In chat, type: number + space + text<br/>e.g. "1 photosynthesis" = Explain</p>
-<p class="hint">Type number to edit:</p>
+<p class="hint">In chat: key + space + text<br/>e.g. "1 sun" = Explain sun</p>
 <form method="post">
 {% csrf_token %}
 <input type="text" name="choice" inputmode="numeric" autofocus="autofocus" style="width:50px"/>
@@ -12,7 +10,6 @@
 {% for num, a in actions %}
 <div class="list-item">
 <strong>{{ num }}.</strong> {{ a.label }}
-<span class="hint">- {{ a.prompt_template|truncatechars:35 }}</span>
 </div>
 {% endfor %}
 {% endblock %}

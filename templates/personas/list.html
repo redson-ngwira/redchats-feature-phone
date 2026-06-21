@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Personas</h2>
 <p class="hint">Type number to use, "n" for new:</p>
 <form method="post">
 {% csrf_token %}
@@ -10,13 +9,11 @@
 <hr/>
 {% for num, p in personas %}
 <div class="list-item">
-<strong>{{ num }}.</strong> {{ p.name }}
-{% if p.is_default %}[DEFAULT]{% endif %}
-<span class="hint">- {{ p.system_prompt|truncatechars:40 }}</span><br/>
-<a href="{% url 'personas:edit' p.pk %}">Edit</a> |
-<a href="{% url 'personas:delete' p.pk %}">Del</a>
+<strong>{{ num }}.</strong> {{ p.name }}{% if p.is_default %} *{% endif %}
+<a href="{% url 'personas:edit' p.pk %}">E</a>
+<a href="{% url 'personas:delete' p.pk %}">D</a>
 </div>
 {% empty %}
-<p class="hint">No personas yet.</p>
+<p class="hint">No personas.</p>
 {% endfor %}
 {% endblock %}
