@@ -1,4 +1,4 @@
-# FeatureChat
+# RedChats
 
 **AI chatbot built for feature phones.** No JavaScript. No heavy CSS. Just XHTML-MP, keypad navigation, and Cerebras AI.
 
@@ -6,7 +6,7 @@ By **Redson Ngwira**
 
 ## Why
 
-1 billion+ people still use feature phones. They deserve AI too. FeatureChat brings ChatGPT-level intelligence to devices with tiny screens, T9 keypads, and browsers that can't run JavaScript.
+1 billion+ people still use feature phones. They deserve AI too. RedChats brings ChatGPT-level intelligence to devices with tiny screens, T9 keypads, and browsers that can't run JavaScript.
 
 ## Features
 
@@ -51,8 +51,9 @@ templates/            # XHTML-MP templates (no JS, minimal CSS)
 ## Quick Start
 
 ```bash
-# Clone and enter directory
-cd featurechat
+# Clone the repo
+git clone https://github.com/redson-ngwira/redchats-feature-phone.git
+cd redchats-feature-phone
 
 # Create virtual environment
 python3 -m venv venv
@@ -132,7 +133,7 @@ Settings in `featurechat/settings.py`:
 
 ## How Context Works
 
-Like ChatGPT, FeatureChat fills the context window intelligently:
+Like ChatGPT, RedChats fills the context window intelligently:
 
 1. System prompt (persona + memory) — always included, cached by Cerebras
 2. Recent messages — newest first, until the 6000-token budget is full

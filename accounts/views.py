@@ -25,7 +25,7 @@ def login_view(request):
             form.add_error(None, 'Invalid phone or PIN.')
     else:
         form = LoginForm()
-    return render(request, 'accounts/login.html', {'form': form, 'page_title': 'Login'})
+    return render(request, 'accounts/login.html', {'form': form, 'page_title': 'RedChats'})
 
 
 def register_view(request):
@@ -49,7 +49,7 @@ def register_view(request):
                 return redirect('chat:chat')
     else:
         form = RegisterForm()
-    return render(request, 'accounts/register.html', {'form': form, 'page_title': 'Register'})
+    return render(request, 'accounts/register.html', {'form': form, 'page_title': 'RedChats'})
 
 
 def logout_view(request):
