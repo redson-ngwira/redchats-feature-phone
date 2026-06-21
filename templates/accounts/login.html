@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Login</h2>
 {% if form.errors %}
 {% for error in form.non_field_errors %}
 <div class="err">{{ error }}</div>
@@ -13,5 +12,6 @@
 <input type="submit" value="Login"/>
 </form>
 <p class="hint">New? <a href="{% url 'accounts:register' %}">Register</a></p>
+<p class="hint">by Redson Ngwira</p>
 {% endblock %}
 {% block nav %}{% endblock %}
