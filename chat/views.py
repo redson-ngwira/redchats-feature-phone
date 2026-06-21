@@ -6,8 +6,9 @@ import httpx
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from django.db.models import Q
 
-from .models import Message
+from .models import Message, SavedResponse
 from .forms import ChatForm, ModelForm
 from .cerebras_client import CerebrasClient
 from .token_tracker import get_usage, add_usage, check_limit
@@ -20,9 +21,36 @@ client = CerebrasClient()
 CONTEXT_TOKEN_BUDGET = 6000
 SUMMARY_TOKEN_BUDGET = 500
 
+LENGTH_MAX_TOKENS = {'short': 150, 'medium': 300, 'long': 600}
+LENGTH_INSTRUCTIONS = {
+    'short': 'Keep responses to 1-2 sentences. Be extremely brief.',
+    'medium': 'Keep responses to 2-4 sentences. Be concise.',
+    'long': 'You may give detailed responses when asked, but still use plain text only.',
+}
+
 
 def _estimate_tokens(text):
     return len(text) // 4
+
+
+def _build_system_prompt(user):
+    parts = [
+        'You are a helpful assistant on a feature phone with a very small screen. '
+        'CRITICAL RULES: '
+        '1. Use PLAIN TEXT ONLY. Never use markdown, headers (#), bold (**), tables, bullet points, or code blocks. '
+        '2. No lists with dashes or asterisks. Use simple numbered points like 1. 2. 3. if needed. '
+        '3. Be direct. Feature phone users scroll painfully on tiny screens. '
+        '4. If the user needs more detail, ask them to follow up with specific questions.',
+    ]
+
+    length = getattr(user, 'response_length', 'medium')
+    parts.append(LENGTH_INSTRUCTIONS.get(length, LENGTH_INSTRUCTIONS['medium']))
+
+    lang = getattr(user, 'response_language', '')
+    if lang and lang != 'en':
+        parts.append(f'Always respond in the language code: {lang}. Translate your responses into that language.')
+
+    return '\n\n'.join(parts)
 
 
 def _summarize_old_messages(conversation, cutoff_time):
@@ -51,15 +79,6 @@ def _summarize_old_messages(conversation, cutoff_time):
         return existing
     return result['content'].strip()
 
-BASE_SYSTEM_PROMPT = (
-    'You are a helpful assistant on a feature phone with a very small screen. '
-    'CRITICAL RULES: '
-    '1. Keep responses SHORT - aim for 2-4 sentences max unless the user explicitly asks for detail. '
-    '2. Use PLAIN TEXT ONLY. Never use markdown, headers (#), bold (**), tables, bullet points, or code blocks. '
-    '3. No lists with dashes or asterisks. Use simple numbered points like 1. 2. 3. if needed. '
-    '4. Be direct and concise. Feature phone users scroll painfully on tiny screens. '
-    '5. If the user needs more detail, ask them to follow up with specific questions.'
-)
 
 SEARCH_TOOL = {
     'type': 'function',
@@ -69,10 +88,7 @@ SEARCH_TOOL = {
         'parameters': {
             'type': 'object',
             'properties': {
-                'query': {
-                    'type': 'string',
-                    'description': 'The search query',
-                },
+                'query': {'type': 'string', 'description': 'The search query'},
             },
             'required': ['query'],
         },
@@ -164,9 +180,7 @@ def _get_or_create_conversation(request):
         except Conversation.DoesNotExist:
             pass
     conv = Conversation.objects.create(
-        user=request.user,
-        title='New Chat',
-        model=request.user.default_model,
+        user=request.user, title='New Chat', model=request.user.default_model,
     )
     request.session['active_conversation'] = conv.id
     return conv
@@ -174,7 +188,7 @@ def _get_or_create_conversation(request):
 
 def _build_messages(conversation, user_message):
     messages = []
-    system_parts = [BASE_SYSTEM_PROMPT]
+    system_parts = [_build_system_prompt(conversation.user)]
 
     persona = conversation.persona
     if persona:
@@ -230,17 +244,52 @@ def _build_messages(conversation, user_message):
     return messages
 
 
+def _get_last_pair(conversation):
+    msgs = list(conversation.messages.filter(role__in=['user', 'assistant']).order_by('-created_at')[:2])
+    if not msgs:
+        return None, None
+    if msgs[0].role == 'assistant':
+        last_ai = msgs[0]
+        last_user = msgs[1] if len(msgs) > 1 and msgs[1].role == 'user' else None
+    else:
+        last_ai = None
+        last_user = msgs[0]
+    return last_user, last_ai
+
+
+def _ai_followup(conversation, instruction, max_tokens=150):
+    last_user, last_ai = _get_last_pair(conversation)
+    if not last_ai:
+        return 'No previous AI response to work with.'
+    context = f'Your previous answer was: {last_ai.content}'
+    if last_user:
+        context += f'\nThe user asked: {last_user.content}'
+    messages = [
+        {'role': 'system', 'content': _build_system_prompt(conversation.user)},
+        {'role': 'user', 'content': f'{context}\n\nNow: {instruction}'},
+    ]
+    result = client.chat(messages, model=conversation.model, max_tokens=max_tokens)
+    if result.get('error'):
+        return result['error']
+    return _strip_markdown(result['content'])
+
+
 def _handle_slash_command(command, conversation, request):
-    cmd = command.lower().strip()
+    parts = command.strip().split(None, 1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ''
+
     if cmd == '/c':
         conversation.messages.filter(role__in=['user', 'assistant']).delete()
         return 'Chat cleared.', 'done'
+
     elif cmd == '/n':
         conv = Conversation.objects.create(
             user=request.user, title='New Chat', model=request.user.default_model,
         )
         request.session['active_conversation'] = conv.id
         return 'New conversation started.', 'done'
+
     elif cmd == '/p':
         return None, 'redirect:personas:list'
     elif cmd == '/m':
@@ -253,23 +302,126 @@ def _handle_slash_command(command, conversation, request):
         return None, f'redirect:export:export_sms:{conversation.id}'
     elif cmd == '/d':
         return None, 'redirect:chat:daily_prompts'
-    elif cmd == '/h' or cmd == '/help':
-        help_text = (
-            'Commands:\n'
-            '/c = Clear chat\n'
-            '/n = New conversation\n'
-            '/p = Personas\n'
-            '/m = Memory\n'
-            '/q = Quick actions\n'
-            '/s = Conversations\n'
-            '/d = Daily prompts\n'
-            '/e = Export SMS\n'
-            '/model = Change model\n'
-            '/help = This help'
-        )
-        return help_text, 'done'
+    elif cmd == '/b':
+        return None, 'redirect:chat:bookmarks'
     elif cmd == '/model':
         return None, 'redirect:chat:model_select'
+
+    elif cmd == '/short':
+        request.user.response_length = 'short'
+        request.user.save(update_fields=['response_length'])
+        return 'Responses set to short.', 'done'
+
+    elif cmd == '/medium':
+        request.user.response_length = 'medium'
+        request.user.save(update_fields=['response_length'])
+        return 'Responses set to medium.', 'done'
+
+    elif cmd == '/long':
+        request.user.response_length = 'long'
+        request.user.save(update_fields=['response_length'])
+        return 'Responses set to long.', 'done'
+
+    elif cmd == '/lang':
+        if arg:
+            request.user.response_language = arg[:10]
+            request.user.save(update_fields=['response_language'])
+            return f'Language set to {arg}.', 'done'
+        lang = request.user.response_language or 'en'
+        return f'Current language: {lang}\nUsage: /lang fr (or es, de, sw...)', 'done'
+
+    elif cmd == '/save':
+        last_user, last_ai = _get_last_pair(conversation)
+        if last_ai:
+            SavedResponse.objects.create(
+                user=request.user,
+                question=last_user.content if last_user else '',
+                response=last_ai.content,
+                conversation=conversation,
+            )
+            return 'Response saved.', 'done'
+        return 'Nothing to save yet.', 'done'
+
+    elif cmd == '/tldr':
+        text = _ai_followup(conversation, 'Summarize your previous answer in exactly 1 sentence.')
+        return text, 'inject'
+
+    elif cmd == '/why':
+        text = _ai_followup(conversation, 'Explain your previous answer more simply, as if to a child.')
+        return text, 'inject'
+
+    elif cmd == '/example':
+        text = _ai_followup(conversation, 'Give a concrete real-world example of what you just explained.')
+        return text, 'inject'
+
+    elif cmd == '/quiz':
+        text = _ai_followup(
+            conversation,
+            'Generate a quick 2-question quiz about what we just discussed. '
+            'Number the questions. Put answers at the end.',
+            max_tokens=200,
+        )
+        return text, 'inject'
+
+    elif cmd == '/wiki':
+        if not arg:
+            return 'Usage: /wiki topic (e.g. /wiki photosynthesis)', 'done'
+        search_text = _web_search(arg)
+        clean = _strip_markdown(search_text)
+        return clean[:500] if clean else f'No results for {arg}.', 'inject'
+
+    elif cmd == '/math':
+        if not arg:
+            return 'Usage: /math expression (e.g. /math 25 * 4 + 10)', 'done'
+        messages = [
+            {'role': 'system', 'content': 'You are a calculator. Return ONLY the numerical answer and a brief explanation in plain text. No markdown.'},
+            {'role': 'user', 'content': f'Calculate: {arg}'},
+        ]
+        result = client.chat(messages, model=conversation.model, max_tokens=100)
+        if result.get('error'):
+            return result['error'], 'done'
+        return _strip_markdown(result['content']), 'inject'
+
+    elif cmd == '/news':
+        topic = arg if arg else 'today top headlines'
+        search_text = _web_search(f'latest news {topic}')
+        messages = [
+            {'role': 'system', 'content': _build_system_prompt(request.user)},
+            {'role': 'user', 'content': f'Summarize these search results into 3 short news headlines with 1-sentence descriptions each. Plain text only.\n\n{search_text}'},
+        ]
+        result = client.chat(messages, model=conversation.model, max_tokens=200)
+        if result.get('error'):
+            return result['error'], 'done'
+        return _strip_markdown(result['content']), 'inject'
+
+    elif cmd == '/find':
+        if not arg:
+            return 'Usage: /find keyword', 'done'
+        request.session['search_query'] = arg
+        return None, 'redirect:chat:search'
+
+    elif cmd == '/h' or cmd == '/help':
+        help_text = (
+            'NAVIGATION\n'
+            '/s = Conversations  /p = Personas\n'
+            '/q = Quick actions   /m = Memory\n'
+            '/d = Daily prompts  /b = Bookmarks\n'
+            '/e = Export SMS     /model = Model\n\n'
+            'RESPONSE\n'
+            '/short /medium /long = Length\n'
+            '/lang xx = Language (fr,es,sw...)\n'
+            '/tldr = Shorter  /why = Simpler\n'
+            '/example = Example  /quiz = Quiz\n\n'
+            'TOOLS\n'
+            '/wiki topic = Lookup\n'
+            '/math expr = Calculate\n'
+            '/news topic = Headlines\n'
+            '/find word = Search chats\n'
+            '/save = Bookmark last answer\n\n'
+            '/c = Clear  /n = New chat'
+        )
+        return help_text, 'done'
+
     return None, None
 
 
@@ -312,23 +464,33 @@ def chat_view(request):
                 result = _handle_slash_command(user_input, conversation, request)
                 if result:
                     msg, action = result
-                    if action and isinstance(action, str) and action.startswith('redirect:'):
-                        parts = action.replace('redirect:', '').split(':')
-                        if len(parts) == 2:
-                            return redirect(f'{parts[0]}:{parts[1]}')
-                        elif len(parts) == 3:
-                            return redirect(f'{parts[0]}:{parts[1]}', parts[2])
-                    if msg:
+                    if action and isinstance(action, str):
+                        if action.startswith('redirect:'):
+                            url_parts = action.replace('redirect:', '').split(':')
+                            if len(url_parts) == 2:
+                                return redirect(f'{url_parts[0]}:{url_parts[1]}')
+                            elif len(url_parts) == 3:
+                                return redirect(f'{url_parts[0]}:{url_parts[1]}', url_parts[2])
+                        elif action == 'inject':
+                            if msg:
+                                clean = _strip_markdown(msg)
+                                Message.objects.create(
+                                    conversation=conversation, role='assistant',
+                                    content=clean, token_count=0,
+                                )
+                                chunks = _chunk_text(clean)
+                                request.session['last_chunks'] = chunks
+                                request.session['last_chunk_page'] = 0
+                    if msg and action == 'done':
                         request.session['flash_message'] = msg
                     return redirect('chat:chat')
 
             if len(user_input) >= 2 and user_input[0].isdigit() and user_input[1] in (' ', '.'):
                 from quickactions.models import QuickAction
                 key_num = int(user_input[0])
-                sep_idx = 1
                 try:
                     qa = QuickAction.objects.get(user=request.user, key_number=key_num)
-                    user_input = qa.prompt_template.replace('{input}', user_input[sep_idx:].strip())
+                    user_input = qa.prompt_template.replace('{input}', user_input[1:].strip())
                 except QuickAction.DoesNotExist:
                     pass
 
@@ -340,8 +502,9 @@ def chat_view(request):
                 conversation.title = user_input[:30]
                 conversation.save()
 
+            max_tokens = LENGTH_MAX_TOKENS.get(request.user.response_length, 300)
             api_messages = _build_messages(conversation, user_input)
-            result = _chat_with_tools(api_messages, conversation.model, max_tokens=300)
+            result = _chat_with_tools(api_messages, conversation.model, max_tokens=max_tokens)
 
             if result.get('error'):
                 request.session['flash_message'] = result['error']
@@ -400,6 +563,7 @@ def chat_view(request):
         'has_next_chunk': chunk_idx < len(chunks) - 1,
         'has_prev_chunk': chunk_idx > 0,
         'last_response_chunked': last_response_chunked,
+        'response_length': request.user.response_length,
         'usage': usage,
         'limit_warning': limit_info.get('warning', False),
         'usage_percent': limit_info.get('percent', 0),
@@ -465,4 +629,42 @@ def daily_prompts(request):
     return render(request, 'chat/daily_prompts.html', {
         'prompts': enumerate(DAILY_PROMPTS, 1),
         'page_title': 'Daily Prompts',
+    })
+
+
+@login_required
+def search_view(request):
+    query = request.session.pop('search_query', '') or request.GET.get('q', '')
+    results = []
+    if query:
+        results = Message.objects.filter(
+            conversation__user=request.user,
+            role__in=['user', 'assistant'],
+        ).filter(
+            Q(content__icontains=query)
+        ).select_related('conversation').order_by('-created_at')[:20]
+
+    return render(request, 'chat/search.html', {
+        'query': query,
+        'results': results,
+        'page_title': 'Search',
+    })
+
+
+@login_required
+def bookmarks_view(request):
+    saved = SavedResponse.objects.filter(user=request.user)
+    numbered = [(i + 1, s) for i, s in enumerate(saved)]
+
+    if request.method == 'POST':
+        choice = request.POST.get('choice', '').strip()
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(saved):
+                saved[idx].delete()
+                return redirect('chat:bookmarks')
+
+    return render(request, 'chat/bookmarks.html', {
+        'saved': numbered,
+        'page_title': 'Bookmarks',
     })

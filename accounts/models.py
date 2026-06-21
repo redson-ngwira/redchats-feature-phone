@@ -8,6 +8,11 @@ class UserProfile(AbstractUser):
     pin_hash = models.CharField(max_length=256)
     display_name = models.CharField(max_length=50, blank=True)
     default_model = models.CharField(max_length=50, default='gpt-oss-120b')
+    response_length = models.CharField(
+        max_length=10, default='medium',
+        choices=[('short', 'Short'), ('medium', 'Medium'), ('long', 'Long')],
+    )
+    response_language = models.CharField(max_length=10, default='en', blank=True)
 
     USERNAME_FIELD = 'phone'
     REQUIRED_FIELDS = []

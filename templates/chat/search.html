@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" action="{% url 'chat:search' %}">
+<input type="text" name="q" value="{{ query }}" autofocus="autofocus" style="width:80%"/>
+<input type="submit" value="Find"/>
+</form>
+<hr/>
+{% for msg in results %}
+<div class="list-item">
+<strong>{{ msg.conversation.title|truncatechars:15 }}</strong>
+<span class="hint">({{ msg.role }})</span><br/>
+{{ msg.content|truncatechars:80 }}
+</div>
+{% empty %}
+{% if query %}<p class="hint">No results for "{{ query }}"</p>{% endif %}
+{% endfor %}
+<p><a href="{% url 'chat:chat' %}">[Back]</a></p>
+{% endblock %}

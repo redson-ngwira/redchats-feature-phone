@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<p class="hint">Type number to delete:</p>
+<form method="post">
+{% csrf_token %}
+<input type="text" name="choice" inputmode="numeric" autofocus="autofocus" style="width:50px"/>
+<input type="submit" value="Del"/>
+</form>
+<hr/>
+{% for num, s in saved %}
+<div class="list-item">
+<strong>{{ num }}.</strong>
+{% if s.question %}<span class="hint">Q: {{ s.question|truncatechars:30 }}</span><br/>{% endif %}
+{{ s.response|truncatechars:60 }}
+</div>
+{% empty %}
+<p class="hint">No bookmarks. Use /save in chat.</p>
+{% endfor %}
+<p><a href="{% url 'chat:chat' %}">[Back]</a></p>
+{% endblock %}
