@@ -17,7 +17,39 @@ from memory.models import MemoryItem
 
 client = CerebrasClient()
 
-MAX_CONTEXT_MESSAGES = 10
+CONTEXT_TOKEN_BUDGET = 6000
+SUMMARY_TOKEN_BUDGET = 500
+
+
+def _estimate_tokens(text):
+    return len(text) // 4
+
+
+def _summarize_old_messages(conversation, cutoff_time):
+    old_msgs = conversation.messages.filter(
+        role__in=['user', 'assistant'],
+        created_at__lt=cutoff_time,
+    )
+    if not old_msgs.exists():
+        return ''
+
+    existing = conversation.summary or ''
+    old_text = '\n'.join(f'{m.role}: {m.content}' for m in old_msgs[:30])
+    if existing:
+        old_text = f'Previous summary: {existing}\n\nNew messages to add:\n{old_text}'
+
+    prompt = (
+        'Summarize this conversation history into 2-3 short sentences. '
+        'Focus on key topics, decisions, and facts. Plain text only, no markdown.'
+    )
+    messages = [
+        {'role': 'system', 'content': prompt},
+        {'role': 'user', 'content': old_text},
+    ]
+    result = client.chat(messages, max_tokens=150)
+    if result.get('error'):
+        return existing
+    return result['content'].strip()
 
 BASE_SYSTEM_PROMPT = (
     'You are a helpful assistant on a feature phone with a very small screen. '
@@ -154,15 +186,44 @@ def _build_messages(conversation, user_message):
         memory_text += '; '.join(f'{m.key}: {m.value}' for m in memories[:20])
         system_parts.append(memory_text)
 
-    messages.append({'role': 'system', 'content': '\n\n'.join(system_parts)})
+    system_content = '\n\n'.join(system_parts)
+    messages.append({'role': 'system', 'content': system_content})
+    used_tokens = _estimate_tokens(system_content)
 
-    history = list(
+    all_history = list(
         conversation.messages.filter(role__in=['user', 'assistant'])
-        .order_by('-created_at')[:MAX_CONTEXT_MESSAGES]
+        .order_by('-created_at')
     )
-    history.reverse()
 
-    for msg in history:
+    included = []
+    for msg in all_history:
+        msg_tokens = _estimate_tokens(msg.content) + 4
+        if used_tokens + msg_tokens + SUMMARY_TOKEN_BUDGET > CONTEXT_TOKEN_BUDGET:
+            break
+        included.append(msg)
+        used_tokens += msg_tokens
+
+    included.reverse()
+
+    if len(included) < len(all_history):
+        if included:
+            cutoff = included[0].created_at
+        else:
+            cutoff = all_history[-1].created_at
+
+        if not conversation.summary or conversation.summary_up_to != cutoff:
+            new_summary = _summarize_old_messages(conversation, cutoff)
+            if new_summary:
+                conversation.summary = new_summary
+                conversation.summary_up_to = cutoff
+                conversation.save(update_fields=['summary', 'summary_up_to'])
+
+        if conversation.summary:
+            summary_msg = f'Earlier conversation summary: {conversation.summary}'
+            messages.append({'role': 'system', 'content': summary_msg})
+            used_tokens += _estimate_tokens(summary_msg)
+
+    for msg in included:
         messages.append({'role': msg.role, 'content': msg.content})
 
     messages.append({'role': 'user', 'content': user_message})

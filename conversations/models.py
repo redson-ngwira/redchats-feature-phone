@@ -8,6 +8,8 @@ class Conversation(models.Model):
     model = models.CharField(max_length=50, default='gpt-oss-120b')
     persona = models.ForeignKey('personas.Persona', on_delete=models.SET_NULL, null=True, blank=True)
     is_pinned = models.BooleanField(default=False)
+    summary = models.TextField(blank=True, default='')
+    summary_up_to = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
