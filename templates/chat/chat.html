@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if limit_warning %}
+<div class="warn">!! {{ usage_percent|floatformat:0 }}% of daily tokens used</div>
+{% endif %}
+
+{% if flash %}
+<div class="msg msg-sys">{{ flash|linebreaksbr }}</div>
+<hr/>
+{% endif %}
+
+<p class="hint">{% if conversation.persona %}{{ conversation.persona.name }} | {% endif %}{{ conversation.model }}</p>
+
+<hr/>
+
+{% for msg in messages %}
+<div class="msg msg-{{ msg.role }}">
+<span class="role">{% if msg.role == 'user' %}You{% else %}AI{% endif %}:</span>
+{{ msg.content|linebreaksbr }}
+</div>
+{% empty %}
+<p class="hint">No messages yet. Type below.</p>
+{% endfor %}
+
+{% if has_older %}
+<p><a href="?page={{ msg_page|add:1 }}">[Older]</a></p>
+{% endif %}
+{% if has_newer %}
+<p><a href="?page={{ msg_page|add:-1 }}">[Newer]</a></p>
+{% endif %}
+
+{% if total_chunks > 1 %}
+<hr/>
+<div class="chunk">
+<span class="hint">({{ chunk_page|add:1 }}/{{ total_chunks }}):</span><br/>
+{{ current_chunk }}
+</div>
+<p>
+{% if has_prev_chunk %}<a href="{% url 'chat:chunk_nav' 'prev' %}">[Prev]</a> {% endif %}
+{% if has_next_chunk %}<a href="{% url 'chat:chunk_nav' 'next' %}">[Next]</a> {% endif %}
+<a href="{% url 'chat:chunk_nav' 'full' %}">[Full]</a>
+</p>
+{% endif %}
+
+<hr/>
+<form method="post" action="{% url 'chat:chat' %}">
+{% csrf_token %}
+{{ form.message }}<br/>
+<input type="submit" value="Send"/>
+</form>
+
+<p class="hint">
+<a href="{% url 'chat:chat' %}">1:Chat</a>
+<a href="{% url 'conversations:list' %}">2:Conv</a>
+<a href="{% url 'personas:list' %}">3:Pers</a>
+<a href="{% url 'quickactions:list' %}">4:Act</a>
+<a href="{% url 'memory:list' %}">5:Mem</a>
+<a href="{% url 'chat:model_select' %}">/model</a>
+<a href="{% url 'export:export_sms' conversation.pk %}">/sms</a>
+</p>
+{% endblock %}

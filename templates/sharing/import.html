@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Import Shared</h2>
+{% if form.errors %}
+{% for error in form.share_code.errors %}
+<div class="err">{{ error }}</div>
+{% endfor %}
+{% endif %}
+<form method="post">
+{% csrf_token %}
+<label>Enter 6-char code:<br/>{{ form.share_code }}</label><br/>
+<input type="submit" value="Import"/>
+</form>
+<p><a href="{% url 'sharing:list' %}">[Cancel]</a></p>
+{% endblock %}

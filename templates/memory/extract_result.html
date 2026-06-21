@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Extraction Complete</h2>
+<p>Saved <strong>{{ saved }}</strong> fact(s) from "{{ conversation.title }}".</p>
+<p><a href="{% url 'memory:list' %}">[View Memory]</a> | <a href="{% url 'chat:chat' %}">[Back to Chat]</a></p>
+{% endblock %}

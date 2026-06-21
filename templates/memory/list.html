@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Memory</h2>
+<p class="hint">Facts the AI remembers about you across chats.</p>
+<p class="hint">Type number to edit, "n" for new, "e" to extract from chat:</p>
+<form method="post">
+{% csrf_token %}
+<input type="text" name="choice" autofocus="autofocus" style="width:50px"/>
+<input type="submit" value="Go"/>
+</form>
+<hr/>
+{% for num, m in memories %}
+<div class="list-item">
+<strong>{{ num }}.</strong> {{ m.key }}: {{ m.value|truncatechars:40 }}<br/>
+<a href="{% url 'memory:edit' m.pk %}">Edit</a> |
+<a href="{% url 'memory:delete' m.pk %}">Del</a>
+</div>
+{% empty %}
+<p class="hint">No memories yet. Chat then press "e" to extract facts.</p>
+{% endfor %}
+{% endblock %}

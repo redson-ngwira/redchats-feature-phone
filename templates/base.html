@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//WAPFORUM//DTD XHTML Mobile 1.0//EN" "http://www.wapforum.org/DTD/xhtml-mobile.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{ page_title|default:"FeatureChat" }}</title>
+<style>
+body{font-family:sans-serif;font-size:small;margin:4px;padding:0;background:#fff;color:#000}
+h1{font-size:medium;margin:2px 0;border-bottom:1px solid #999;padding-bottom:2px}
+h2{font-size:small;margin:2px 0}
+.nav{border-top:1px solid #999;margin-top:6px;padding-top:4px;font-size:x-small}
+.nav a{margin-right:6px}
+.msg{margin:4px 0;padding:3px;border-left:2px solid #999}
+.msg-user{border-left-color:#333}
+.msg-ai{border-left-color:#666;background:#f5f5f5}
+.msg-sys{border-left-color:#999;color:#666;font-style:italic;font-size:x-small}
+.role{font-weight:bold;font-size:x-small}
+.chunk{margin:4px 0;padding:4px;border:1px solid #ccc}
+.warn{color:red;font-size:x-small;font-weight:bold}
+.hint{font-size:x-small;color:#666}
+form{margin:4px 0}
+input,textarea,select{font-size:small;width:95%;margin:2px 0}
+input[type="submit"],button{font-size:small;margin:4px 0}
+.list-item{margin:2px 0;padding:2px 0;border-bottom:1px dotted #ccc}
+.list-item a{text-decoration:none}
+hr{border:0;border-top:1px solid #ccc;margin:4px 0}
+.err{color:red;font-size:x-small}
+</style>
+</head>
+<body>
+{% if page_title %}<h1>{{ page_title }}</h1>{% endif %}
+
+{% if messages %}
+{% for message in messages %}
+<div class="msg msg-sys">{{ message }}</div>
+{% endfor %}
+{% endif %}
+
+{% block content %}{% endblock %}
+
+{% block nav %}
+<div class="nav">
+{% if user.is_authenticated %}
+<a href="{% url 'chat:chat' %}">1:Chat</a>
+<a href="{% url 'conversations:list' %}">2:Convos</a>
+<a href="{% url 'personas:list' %}">3:Personas</a>
+<a href="{% url 'quickactions:list' %}">4:Actions</a>
+<a href="{% url 'memory:list' %}">5:Memory</a>
+<a href="{% url 'accounts:profile' %}">6:Settings</a>
+<a href="{% url 'sharing:list' %}">7:Share</a>
+<a href="{% url 'accounts:logout' %}">0:Logout</a>
+{% else %}
+<a href="{% url 'accounts:login' %}">Login</a>
+<a href="{% url 'accounts:register' %}">Register</a>
+{% endif %}
+</div>
+{% endblock %}
+
+</body>
+</html>

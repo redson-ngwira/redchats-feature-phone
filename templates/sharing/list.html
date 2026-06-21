@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Sharing</h2>
+<p class="hint">Type "n" to share, "i" to import a code:</p>
+<form method="post">
+{% csrf_token %}
+<input type="text" name="choice" autofocus="autofocus" style="width:50px"/>
+<input type="submit" value="Go"/>
+</form>
+<hr/>
+{% for num, s in shared %}
+<div class="list-item">
+<strong>{{ num }}.</strong> {{ s.title }} [{{ s.share_type }}]
+<br/>
+<span class="hint">Code: <strong>{{ s.share_code }}</strong></span>
+</div>
+{% empty %}
+<p class="hint">Nothing shared yet.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Rename: {{ conversation.title|truncatechars:20 }}</h2>
+<form method="post">
+{% csrf_token %}
+<label>New title:<br/>{{ form.title }}</label><br/>
+<input type="submit" value="Save"/>
+</form>
+<p><a href="{% url 'conversations:list' %}">[Cancel]</a></p>
+{% endblock %}

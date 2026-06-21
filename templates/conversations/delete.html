@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Delete Conversation?</h2>
+<p><strong>{{ conversation.title }}</strong></p>
+<p class="hint">{{ conversation.message_count }} messages will be lost.</p>
+<form method="post">
+{% csrf_token %}
+<input type="submit" value="Yes, Delete"/>
+</form>
+<p><a href="{% url 'conversations:list' %}">[Cancel]</a></p>
+{% endblock %}

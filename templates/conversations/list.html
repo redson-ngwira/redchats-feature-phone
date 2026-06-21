@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Conversations</h2>
+<p class="hint">Type number to open, "n" for new:</p>
+<form method="post">
+{% csrf_token %}
+<input type="text" name="choice" inputmode="numeric" autofocus="autofocus" style="width:50px"/>
+<input type="submit" value="Go"/>
+</form>
+<hr/>
+{% for num, conv in conversations %}
+<div class="list-item">
+<strong>{{ num }}.</strong>
+{{ conv.title|truncatechars:25 }}
+{% if conv.is_pinned %}[PIN]{% endif %}
+<span class="hint">({{ conv.message_count }} msgs)</span><br/>
+<a href="{% url 'conversations:rename' conv.pk %}">Ren</a> |
+<a href="{% url 'conversations:pin' conv.pk %}">Pin</a> |
+<a href="{% url 'conversations:delete' conv.pk %}">Del</a> |
+<a href="{% url 'export:export_sms' conv.pk %}">SMS</a>
+</div>
+{% empty %}
+<p class="hint">No conversations yet.</p>
+{% endfor %}
+{% endblock %}

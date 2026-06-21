@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ shared.title }}</h2>
+<p class="hint">Type: {{ shared.share_type }}</p>
+<p class="hint">Code: <strong>{{ shared.share_code }}</strong></p>
+<hr/>
+<p>{{ shared.content }}</p>
+<hr/>
+{% if user.is_authenticated %}
+<p><a href="{% url 'sharing:import' %}">Import this</a> | <a href="{% url 'sharing:list' %}">Back</a></p>
+{% else %}
+<p><a href="{% url 'accounts:login' %}">Login to import</a></p>
+{% endif %}
+{% endblock %}
+{% block nav %}{% endblock %}

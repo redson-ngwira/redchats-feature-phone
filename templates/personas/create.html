@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New Persona</h2>
+<form method="post">
+{% csrf_token %}
+<label>Name:<br/>{{ form.name }}</label><br/>
+<label>System Prompt:<br/>{{ form.system_prompt }}</label><br/>
+<label>{{ form.is_default }} Set as default</label><br/>
+<input type="submit" value="Create"/>
+</form>
+<p><a href="{% url 'personas:list' %}">[Cancel]</a></p>
+{% endblock %}

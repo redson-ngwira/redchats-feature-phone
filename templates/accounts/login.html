@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Login</h2>
+{% if form.errors %}
+{% for error in form.non_field_errors %}
+<div class="err">{{ error }}</div>
+{% endfor %}
+{% endif %}
+<form method="post" action="{% url 'accounts:login' %}">
+{% csrf_token %}
+<label>Phone:<br/>{{ form.phone }}</label><br/>
+<label>PIN (4-6 digits):<br/>{{ form.pin }}</label><br/>
+<input type="submit" value="Login"/>
+</form>
+<p class="hint">New? <a href="{% url 'accounts:register' %}">Register</a></p>
+{% endblock %}
+{% block nav %}{% endblock %}

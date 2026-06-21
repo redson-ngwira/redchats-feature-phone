@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New Conversation</h2>
+<form method="post">
+{% csrf_token %}
+<label>Title:<br/>{{ form.title }}</label><br/>
+<input type="submit" value="Create"/>
+</form>
+<p><a href="{% url 'conversations:list' %}">[Back]</a></p>
+{% endblock %}

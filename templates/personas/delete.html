@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Delete Persona?</h2>
+<p><strong>{{ persona.name }}</strong></p>
+<p class="hint">{{ persona.system_prompt|truncatechars:60 }}</p>
+<form method="post">
+{% csrf_token %}
+<input type="submit" value="Yes, Delete"/>
+</form>
+<p><a href="{% url 'personas:list' %}">[Cancel]</a></p>
+{% endblock %}

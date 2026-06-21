@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Extract Facts</h2>
+<p>Extract key facts from: <strong>{{ conversation.title }}</strong></p>
+<p class="hint">This will use AI to find facts about you and save them to Memory.</p>
+<form method="post">
+{% csrf_token %}
+<input type="submit" value="Extract Now"/>
+</form>
+<p><a href="{% url 'memory:list' %}">[Cancel]</a></p>
+{% endblock %}

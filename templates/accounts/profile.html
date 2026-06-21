@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Settings</h2>
+<p class="hint">Logged in as: {{ user.phone }}</p>
+<form method="post" action="{% url 'accounts:profile' %}">
+{% csrf_token %}
+<label>Display Name:<br/>{{ form.display_name }}</label><br/>
+<label>Default Model:<br/>{{ form.default_model }}</label><br/>
+<input type="submit" value="Save"/>
+</form>
+<hr/>
+<p class="hint">
+<a href="{% url 'sharing:list' %}">7:Sharing</a> |
+<a href="{% url 'accounts:logout' %}">0:Logout</a>
+</p>
+{% endblock %}

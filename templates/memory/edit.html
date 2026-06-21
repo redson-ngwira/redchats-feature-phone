@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit Memory</h2>
+<form method="post">
+{% csrf_token %}
+<label>Key:<br/>{{ form.key }}</label><br/>
+<label>Value:<br/>{{ form.value }}</label><br/>
+<input type="submit" value="Save"/>
+</form>
+<p><a href="{% url 'memory:list' %}">[Cancel]</a></p>
+{% endblock %}

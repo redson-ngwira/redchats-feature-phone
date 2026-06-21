@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit Action #{{ action.key_number }}</h2>
+<form method="post">
+{% csrf_token %}
+<label>Label:<br/>{{ form.label }}</label><br/>
+<label>Template ({input} = your text):<br/>{{ form.prompt_template }}</label><br/>
+<input type="submit" value="Save"/>
+</form>
+<p><a href="{% url 'quickactions:list' %}">[Cancel]</a></p>
+{% endblock %}

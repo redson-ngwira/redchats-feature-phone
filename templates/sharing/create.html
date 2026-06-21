@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Share New</h2>
+<form method="post">
+{% csrf_token %}
+<label>Title:<br/>{{ form.title }}</label><br/>
+<label>Type:<br/>{{ form.share_type }}</label><br/>
+<label>Content/Prompt:<br/>{{ form.content }}</label><br/>
+<input type="submit" value="Share"/>
+</form>
+<p><a href="{% url 'sharing:list' %}">[Cancel]</a></p>
+{% endblock %}
