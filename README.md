@@ -150,6 +150,30 @@ This means users can have long conversations and the AI remembers everything, ev
 5. Consider adding HTTPS via a reverse proxy (nginx/caddy)
 6. Feature phone browsers: Opera Mini, UC Browser, Bolt, Nokia Xpress
 
+## Deploying to PythonAnywhere (Free)
+
+```bash
+# 1. On PythonAnywhere, open a Bash console and clone:
+git clone https://github.com/redson-ngwira/redchats-feature-phone.git
+cd redchats-feature-phone
+
+# 2. Run the deployment script:
+bash deploy.sh
+
+# 3. Edit .env and add your Cerebras API key:
+nano .env
+
+# 4. On the Web tab:
+#    - Add a new web app → Manual configuration → Python 3.10
+#    - Source code: /home/redchats/redchats-feature-phone
+#    - Virtualenv: /home/redchats/.virtualenvs/redchats
+#    - Edit WSGI file → paste the WSGI config from deploy.sh output
+#    - Static files: URL=/static/  Dir=/home/redchats/redchats-feature-phone/staticfiles
+#    - Click Reload
+
+# 5. Your site is live at: redchats.pythonanywhere.com
+```
+
 ## License
 
 MIT
