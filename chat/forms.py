@@ -3,10 +3,13 @@ from django import forms
 
 class ChatForm(forms.Form):
     message = forms.CharField(
+        max_length=500,
         widget=forms.Textarea(attrs={
-            'rows': 3,
+            'rows': 2,
+            'cols': 30,
             'autofocus': True,
-            'placeholder': 'Type message or /cmd...',
+            'placeholder': 'Type msg or /help...',
+            'maxlength': 500,
         }),
     )
 

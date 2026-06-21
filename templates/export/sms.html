@@ -1,26 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Export: {{ conversation.title|truncatechars:20 }}</h2>
+<h2>Export</h2>
 <p class="hint">
-<a href="?fmt=sms">SMS Chunks</a> |
-<a href="?fmt=text">Plain Text</a>
+<a href="?fmt=sms">SMS</a> | <a href="?fmt=text">Text</a>
 </p>
 <hr/>
-{% if format == 'sms' %}
-<p class="hint">{{ chunks|length }} SMS chunk(s). Click to send via SMS:</p>
-{% for chunk in chunks %}
-<div class="chunk">
-<strong>SMS {{ forloop.counter }}/{{ chunks|length }}:</strong><br/>
-{{ chunk }}<br/>
-{% if sms_links %}
-<a href="{{ sms_links|last }}">Send via SMS</a>
-{% endif %}
+{% for num, chunk, link in chunks %}
+<div class="list-item">
+<strong>{{ num }}.</strong> {{ chunk|truncatechars:100 }}
+{% if format == 'sms' %}<br/><a href="{{ link }}">Send SMS</a>{% endif %}
 </div>
+{% empty %}
+<p class="hint">No messages to export.</p>
 {% endfor %}
-{% else %}
-{% for chunk in chunks %}
-<pre style="font-size:x-small;white-space:pre-wrap">{{ chunk }}</pre>
-{% endfor %}
-{% endif %}
-<p><a href="{% url 'chat:chat' %}">[Back to Chat]</a></p>
+<p><a href="{% url 'chat:chat' %}">[Back]</a></p>
 {% endblock %}

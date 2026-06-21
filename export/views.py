@@ -1,6 +1,7 @@
+from urllib.parse import quote
+
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.conf import settings
 
 from conversations.models import Conversation
 
@@ -47,14 +48,13 @@ def export_sms(request, pk):
         full_text = ' | '.join(raw)
         chunks = _chunk_sms(full_text)
 
-    sms_links = []
-    for chunk in chunks:
-        sms_links.append(f'sms:?body={chunk}')
+    sms_links = [f'sms:?body={quote(c)}' for c in chunks]
+
+    numbered_chunks = [(i + 1, chunk, link) for i, (chunk, link) in enumerate(zip(chunks, sms_links))]
 
     return render(request, 'export/sms.html', {
         'conversation': conv,
-        'chunks': chunks,
-        'sms_links': sms_links,
+        'chunks': numbered_chunks,
         'format': fmt,
         'page_title': 'Export',
     })

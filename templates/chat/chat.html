@@ -2,25 +2,24 @@
 {% block content %}
 
 {% if limit_warning %}
-<div class="warn">!! {{ usage_percent|floatformat:0 }}% of daily tokens used</div>
+<div class="warn">!! {{ usage_percent|floatformat:0 }}% tokens today</div>
 {% endif %}
 
 {% if flash %}
-<div class="msg msg-sys">{{ flash|linebreaksbr }}</div>
-<hr/>
+<div class="flash">{{ flash|linebreaksbr }}</div>
 {% endif %}
 
 <p class="hint">{% if conversation.persona %}{{ conversation.persona.name }} | {% endif %}{{ conversation.model }}</p>
 
 <hr/>
 
-{% for msg in messages %}
+{% for msg in chat_messages %}
 <div class="msg msg-{{ msg.role }}">
 <span class="role">{% if msg.role == 'user' %}You{% else %}AI{% endif %}:</span>
 {{ msg.content|linebreaksbr }}
 </div>
 {% empty %}
-<p class="hint">No messages yet. Type below.</p>
+<p class="hint">Say hi or type /help</p>
 {% endfor %}
 
 {% if has_older %}
@@ -51,12 +50,9 @@
 </form>
 
 <p class="hint">
-<a href="{% url 'chat:chat' %}">1:Chat</a>
-<a href="{% url 'conversations:list' %}">2:Conv</a>
-<a href="{% url 'personas:list' %}">3:Pers</a>
-<a href="{% url 'quickactions:list' %}">4:Act</a>
-<a href="{% url 'memory:list' %}">5:Mem</a>
-<a href="{% url 'chat:model_select' %}">/model</a>
-<a href="{% url 'export:export_sms' conversation.pk %}">/sms</a>
+<a href="{% url 'conversations:list' %}">Convos</a>
+<a href="{% url 'chat:model_select' %}">Model</a>
+<a href="{% url 'export:export_sms' conversation.pk %}">SMS</a>
+/help
 </p>
 {% endblock %}

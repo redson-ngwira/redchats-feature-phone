@@ -1,4 +1,14 @@
 from django.contrib.auth.models import AnonymousUser
+from django.shortcuts import redirect
+
+
+PUBLIC_PREFIXES = (
+    '/accounts/login/',
+    '/accounts/register/',
+    '/admin/',
+    '/sharing/public/',
+    '/static/',
+)
 
 
 class PhoneAuthMiddleware:
@@ -7,7 +17,6 @@ class PhoneAuthMiddleware:
 
     def __call__(self, request):
         if isinstance(request.user, AnonymousUser):
-            public_prefixes = ('/accounts/login/', '/accounts/register/', '/admin/', '/sharing/public/')
-            if not any(request.path.startswith(p) for p in public_prefixes):
-                return __import__('django.shortcuts', fromlist=['redirect']).redirect('accounts:login')
+            if not any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
+                return redirect('accounts:login')
         return self.get_response(request)

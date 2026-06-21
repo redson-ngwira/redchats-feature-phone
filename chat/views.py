@@ -1,7 +1,8 @@
-import math
+import json
 import re
-from datetime import date
+from urllib.parse import quote
 
+import httpx
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
@@ -16,6 +17,8 @@ from memory.models import MemoryItem
 
 client = CerebrasClient()
 
+MAX_CONTEXT_MESSAGES = 10
+
 BASE_SYSTEM_PROMPT = (
     'You are a helpful assistant on a feature phone with a very small screen. '
     'CRITICAL RULES: '
@@ -25,6 +28,32 @@ BASE_SYSTEM_PROMPT = (
     '4. Be direct and concise. Feature phone users scroll painfully on tiny screens. '
     '5. If the user needs more detail, ask them to follow up with specific questions.'
 )
+
+SEARCH_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'web_search',
+        'description': 'Search the web for current information. Use when the user asks about current events, prices, weather, news, or anything requiring up-to-date info.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'query': {
+                    'type': 'string',
+                    'description': 'The search query',
+                },
+            },
+            'required': ['query'],
+        },
+    },
+}
+
+DAILY_PROMPTS = [
+    'Tell me a fun fact',
+    'Give me a quick tip for today',
+    'What is a good question to ask?',
+    'Explain something interesting in 2 sentences',
+    'Help me practice English',
+]
 
 
 def _strip_markdown(text):
@@ -39,6 +68,60 @@ def _strip_markdown(text):
     text = re.sub(r'^[-=]{3,}$', '', text, flags=re.MULTILINE)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+def _web_search(query):
+    try:
+        with httpx.Client(timeout=10.0) as c:
+            resp = c.get(
+                'https://api.duckduckgo.com/',
+                params={'q': query, 'format': 'json', 'no_html': 1, 'skip_disambig': 1},
+            )
+            data = resp.json()
+            abstract = data.get('AbstractText', '')
+            answer = data.get('Answer', '')
+            related = data.get('RelatedTopics', [])
+            parts = []
+            if answer:
+                parts.append(answer)
+            if abstract:
+                parts.append(abstract[:300])
+            for topic in related[:3]:
+                text = topic.get('Text', '')
+                if text:
+                    parts.append(text[:150])
+            return ' '.join(parts) if parts else f'No results found for: {query}'
+    except Exception:
+        return f'Search failed for: {query}'
+
+
+def _chat_with_tools(messages, model, max_tokens=300):
+    result = client.chat_with_tools(messages, model=model, tools=[SEARCH_TOOL], max_tokens=max_tokens)
+
+    if result.get('error'):
+        return result
+
+    tool_calls = result.get('tool_calls', [])
+    if not tool_calls:
+        return result
+
+    messages.append(result.get('assistant_message', {}))
+
+    for tc in tool_calls:
+        fn_name = tc.get('function', {}).get('name', '')
+        fn_args = json.loads(tc.get('function', {}).get('arguments', '{}'))
+        tc_id = tc.get('id', '')
+
+        if fn_name == 'web_search':
+            search_result = _web_search(fn_args.get('query', ''))
+            messages.append({
+                'role': 'tool',
+                'content': search_result,
+                'tool_call_id': tc_id,
+            })
+
+    final = client.chat(messages, model=model, max_tokens=max_tokens)
+    return final
 
 
 def _get_or_create_conversation(request):
@@ -73,7 +156,13 @@ def _build_messages(conversation, user_message):
 
     messages.append({'role': 'system', 'content': '\n\n'.join(system_parts)})
 
-    for msg in conversation.messages.filter(role__in=['user', 'assistant']):
+    history = list(
+        conversation.messages.filter(role__in=['user', 'assistant'])
+        .order_by('-created_at')[:MAX_CONTEXT_MESSAGES]
+    )
+    history.reverse()
+
+    for msg in history:
         messages.append({'role': msg.role, 'content': msg.content})
 
     messages.append({'role': 'user', 'content': user_message})
@@ -87,9 +176,7 @@ def _handle_slash_command(command, conversation, request):
         return 'Chat cleared.', 'done'
     elif cmd == '/n':
         conv = Conversation.objects.create(
-            user=request.user,
-            title='New Chat',
-            model=request.user.default_model,
+            user=request.user, title='New Chat', model=request.user.default_model,
         )
         request.session['active_conversation'] = conv.id
         return 'New conversation started.', 'done'
@@ -103,6 +190,8 @@ def _handle_slash_command(command, conversation, request):
         return None, 'redirect:conversations:list'
     elif cmd == '/e':
         return None, f'redirect:export:export_sms:{conversation.id}'
+    elif cmd == '/d':
+        return None, 'redirect:chat:daily_prompts'
     elif cmd == '/h' or cmd == '/help':
         help_text = (
             'Commands:\n'
@@ -111,8 +200,9 @@ def _handle_slash_command(command, conversation, request):
             '/p = Personas\n'
             '/m = Memory\n'
             '/q = Quick actions\n'
-            '/s = Switch conversation\n'
-            '/e = Export as SMS\n'
+            '/s = Conversations\n'
+            '/d = Daily prompts\n'
+            '/e = Export SMS\n'
             '/model = Change model\n'
             '/help = This help'
         )
@@ -146,20 +236,11 @@ def _chunk_text(text, chunk_size=None):
 @login_required
 def chat_view(request):
     conversation = _get_or_create_conversation(request)
-    chunk_page = request.GET.get('chunk', '0')
-    msg_page = request.GET.get('page', '0')
-
+    msg_page = 0
     try:
-        chunk_page = int(chunk_page)
+        msg_page = int(request.GET.get('page', '0'))
     except ValueError:
-        chunk_page = 0
-    try:
-        msg_page = int(msg_page)
-    except ValueError:
-        msg_page = 0
-
-    last_response_chunks = request.session.get('last_chunks', [])
-    last_chunk_page = request.session.get('last_chunk_page', 0)
+        pass
 
     if request.method == 'POST':
         form = ChatForm(request.POST)
@@ -180,26 +261,26 @@ def chat_view(request):
                         request.session['flash_message'] = msg
                     return redirect('chat:chat')
 
-            # Check quick action shortcut (digit prefix)
-            if len(user_input) >= 2 and user_input[0].isdigit() and user_input[1] == ' ':
+            if len(user_input) >= 2 and user_input[0].isdigit() and user_input[1] in (' ', '.'):
                 from quickactions.models import QuickAction
                 key_num = int(user_input[0])
+                sep_idx = 1
                 try:
                     qa = QuickAction.objects.get(user=request.user, key_number=key_num)
-                    user_input = qa.prompt_template.replace('{input}', user_input[2:])
+                    user_input = qa.prompt_template.replace('{input}', user_input[sep_idx:].strip())
                 except QuickAction.DoesNotExist:
                     pass
 
             Message.objects.create(
-                conversation=conversation, role='user', content=user_input
+                conversation=conversation, role='user', content=user_input[:500],
             )
 
             if conversation.title == 'New Chat':
                 conversation.title = user_input[:30]
                 conversation.save()
 
-            messages = _build_messages(conversation, user_input)
-            result = client.chat(messages, model=conversation.model, max_tokens=300)
+            api_messages = _build_messages(conversation, user_input)
+            result = _chat_with_tools(api_messages, conversation.model, max_tokens=300)
 
             if result.get('error'):
                 request.session['flash_message'] = result['error']
@@ -207,54 +288,47 @@ def chat_view(request):
                 total_tokens = result.get('total_tokens', 0)
                 clean_content = _strip_markdown(result['content'])
                 Message.objects.create(
-                    conversation=conversation,
-                    role='assistant',
-                    content=clean_content,
-                    model_used=result.get('model', ''),
+                    conversation=conversation, role='assistant',
+                    content=clean_content, model_used=result.get('model', ''),
                     token_count=total_tokens,
                 )
                 add_usage(request.user, total_tokens)
-
                 chunks = _chunk_text(clean_content)
                 request.session['last_chunks'] = chunks
                 request.session['last_chunk_page'] = 0
-                chunk_page = 0
 
             return redirect('chat:chat')
     else:
         form = ChatForm()
 
     flash = request.session.pop('flash_message', None)
-    all_messages = conversation.messages.filter(role__in=['user', 'assistant'])
-    total_msgs = all_messages.count()
-    msgs_per_page = settings.MESSAGES_PER_PAGE
-    start = max(0, total_msgs - (msg_page + 1) * msgs_per_page)
-    end = total_msgs - msg_page * msgs_per_page
-    messages = list(all_messages[start:end])
-    has_older = start > 0
-    has_newer = msg_page > 0
+    all_msgs = conversation.messages.filter(role__in=['user', 'assistant'])
+    total = all_msgs.count()
+    per_page = settings.MESSAGES_PER_PAGE
+    start = max(0, total - (msg_page + 1) * per_page)
+    end = total - msg_page * per_page
+    chat_messages = list(all_msgs[start:end])
 
     usage = get_usage(request.user)
     limit_info = check_limit(request.user)
 
     chunks = request.session.get('last_chunks', [])
-    chunk_page_idx = request.session.get('last_chunk_page', 0)
-    current_chunk = chunks[chunk_page_idx] if chunks and chunk_page_idx < len(chunks) else ''
-    total_chunks = len(chunks)
+    chunk_idx = request.session.get('last_chunk_page', 0)
+    current_chunk = chunks[chunk_idx] if chunks and chunk_idx < len(chunks) else ''
 
     return render(request, 'chat/chat.html', {
         'form': form,
         'conversation': conversation,
-        'messages': messages,
+        'chat_messages': chat_messages,
         'flash': flash,
-        'has_older': has_older,
-        'has_newer': has_newer,
+        'has_older': start > 0,
+        'has_newer': msg_page > 0,
         'msg_page': msg_page,
         'current_chunk': current_chunk,
-        'chunk_page': chunk_page_idx,
-        'total_chunks': total_chunks,
-        'has_next_chunk': chunk_page_idx < total_chunks - 1,
-        'has_prev_chunk': chunk_page_idx > 0,
+        'chunk_page': chunk_idx,
+        'total_chunks': len(chunks),
+        'has_next_chunk': chunk_idx < len(chunks) - 1,
+        'has_prev_chunk': chunk_idx > 0,
         'usage': usage,
         'limit_warning': limit_info.get('warning', False),
         'usage_percent': limit_info.get('percent', 0),
@@ -274,11 +348,6 @@ def chunk_nav(request, direction):
         idx = 0
     request.session['last_chunk_page'] = idx
     return redirect('chat:chat')
-
-
-@login_required
-def msg_nav(request, direction):
-    return redirect(f'/chat/?page={request.GET.get("page", "0")}')
 
 
 @login_required
@@ -305,4 +374,24 @@ def model_select(request):
                 form.fields['model'].initial = conv.model
             except Conversation.DoesNotExist:
                 pass
-    return render(request, 'chat/model_select.html', {'form': form, 'page_title': 'Select Model'})
+    return render(request, 'chat/model_select.html', {'form': form, 'page_title': 'Model'})
+
+
+@login_required
+def daily_prompts(request):
+    if request.method == 'POST':
+        choice = request.POST.get('choice', '').strip()
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(DAILY_PROMPTS):
+                request.session['prefill_prompt'] = DAILY_PROMPTS[idx]
+                return redirect('chat:chat')
+        elif choice.lower() == 'r':
+            import random
+            request.session['prefill_prompt'] = random.choice(DAILY_PROMPTS)
+            return redirect('chat:chat')
+
+    return render(request, 'chat/daily_prompts.html', {
+        'prompts': enumerate(DAILY_PROMPTS, 1),
+        'page_title': 'Daily Prompts',
+    })

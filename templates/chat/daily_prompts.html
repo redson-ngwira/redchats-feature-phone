@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Daily Prompts</h2>
+<p class="hint">Pick one or "r" for random:</p>
+<form method="post">
+{% csrf_token %}
+<input type="text" name="choice" inputmode="numeric" autofocus="autofocus" style="width:50px"/>
+<input type="submit" value="Go"/>
+</form>
+<hr/>
+{% for num, prompt in prompts %}
+<div class="list-item">
+<strong>{{ num }}.</strong> {{ prompt }}
+</div>
+{% endfor %}
+<p><a href="{% url 'chat:chat' %}">[Back to Chat]</a></p>
+{% endblock %}

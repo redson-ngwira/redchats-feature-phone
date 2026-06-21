@@ -53,8 +53,10 @@ def register_view(request):
 
 
 def logout_view(request):
-    logout(request)
-    return redirect('accounts:login')
+    if request.method == 'POST':
+        logout(request)
+        return redirect('accounts:login')
+    return render(request, 'accounts/logout_confirm.html', {'page_title': 'Logout'})
 
 
 @login_required

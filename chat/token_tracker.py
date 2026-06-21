@@ -1,20 +1,18 @@
-from datetime import date
+from datetime import datetime, timedelta
 from django.conf import settings
-from django.db import models
+from django.db.models import Sum
 from django.utils import timezone
 
 
 def get_usage(user):
     from chat.models import Message
-    today = timezone.now().date()
-    start_of_day = timezone.make_aware(
-        timezone.datetime.combine(today, timezone.datetime.min.time())
-    )
+    now = timezone.now()
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     total = Message.objects.filter(
         conversation__user=user,
         created_at__gte=start_of_day,
         role='assistant',
-    ).aggregate(total=models.Sum('token_count'))['total'] or 0
+    ).aggregate(total=Sum('token_count'))['total'] or 0
     return total
 
 
